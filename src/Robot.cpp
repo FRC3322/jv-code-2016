@@ -4,6 +4,8 @@
 
 class Robot: public IterativeRobot
 {
+	AnalogInput potentiometer;
+	Encoder m_encoder;
 	std::shared_ptr<NetworkTable> table;
 	Talon claw;
 	RobotDrive myRobot;
@@ -14,6 +16,8 @@ class Robot: public IterativeRobot
 
 public:
 	Robot() :
+		potentiometer(2),
+		m_encoder(0, 1, false, Encoder::k4X),
         table(NULL),
 		claw(4),
 		myRobot(2, 3, 0, 1),
@@ -28,6 +32,11 @@ public:
 		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
+		m_encoder.SetSamplesToAverage(5);
+		// m_encoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
+		m_encoder.SetDistancePerPulse(1.0 / 360.0);
+		m_encoder.SetMinRate(1.0);
+
 	}
 private:
 	void RobotInit()
@@ -60,6 +69,11 @@ private:
 	void AutonomousPeriodic()
 	{
         SmartDashboard::PutNumber(  "IMU_TotalYaw(ours)",         ahrs->GetAngle());
+        SmartDashboard::PutNumber("Encoder Distance", m_encoder.GetDistance());
+        SmartDashboard::PutNumber("Encoder Rate", m_encoder.GetRate());
+        SmartDashboard::PutNumber("Potentiometer Value", potentiometer.GetValue());
+        SmartDashboard::PutNumber("Potentiometer Voltage", potentiometer.GetVoltage());
+
 		if(1) {
 			float angleError = ahrs->GetAngle();
 			if (angleError > 180) {
