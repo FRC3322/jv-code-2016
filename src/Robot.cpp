@@ -5,26 +5,34 @@
 class Robot: public IterativeRobot
 {
 	AnalogInput potentiometer;
-	Encoder m_encoder;
+	PIDController pidController;
+	Encoder encoder;
 	std::shared_ptr<NetworkTable> table;
 	Talon claw;
+	Talon lift;
 	RobotDrive myRobot;
 	Joystick stick;
     AHRS *ahrs;
 	LiveWindow *lw;
 	int autoLoopCounter;
+	bool lastButton4;
+	double setPoint;
 
 public:
 	Robot() :
-		potentiometer(2),
-		m_encoder(0, 1, false, Encoder::k4X),
+		potentiometer(0),
+		pidController(.5, .2, 0, &potentiometer, &lift),
+		encoder(0, 1, false, Encoder::k4X),
         table(NULL),
-		claw(4),
+		claw(5),
+		lift(4),
 		myRobot(2, 3, 0, 1),
 		stick(0),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
-		autoLoopCounter(0)
+		autoLoopCounter(0),
+		lastButton4(false),
+		setPoint(1)
 	{
 		myRobot.SetExpiration(0.1);
 		myRobot.SetMaxOutput(.5);
@@ -32,10 +40,10 @@ public:
 		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
-		m_encoder.SetSamplesToAverage(5);
-		// m_encoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
-		m_encoder.SetDistancePerPulse(1.0 / 360.0);
-		m_encoder.SetMinRate(1.0);
+		encoder.SetSamplesToAverage(5);
+		// encoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
+		encoder.SetDistancePerPulse(1.0 / 360.0);
+		encoder.SetMinRate(1.0);
 
 	}
 private:
@@ -59,6 +67,7 @@ private:
 		CameraServer::GetInstance()->SetQuality(50);
 		//the camera name (ex "cam0") can be found through the roborio web interface
 		CameraServer::GetInstance()->StartAutomaticCapture("cam0");
+		pidController.Enable(); //begin
 	}
 	void AutonomousInit()
 	{
@@ -68,9 +77,9 @@ private:
 
 	void AutonomousPeriodic()
 	{
-        SmartDashboard::PutNumber(  "IMU_TotalYaw(ours)",         ahrs->GetAngle());
-        SmartDashboard::PutNumber("Encoder Distance", m_encoder.GetDistance());
-        SmartDashboard::PutNumber("Encoder Rate", m_encoder.GetRate());
+        SmartDashboard::PutNumber("IMU_TotalYaw(ours)",         ahrs->GetAngle());
+        SmartDashboard::PutNumber("Encoder Distance", encoder.GetDistance());
+        SmartDashboard::PutNumber("Encoder Rate", encoder.GetRate());
         SmartDashboard::PutNumber("Potentiometer Value", potentiometer.GetValue());
         SmartDashboard::PutNumber("Potentiometer Voltage", potentiometer.GetVoltage());
 
@@ -95,6 +104,24 @@ private:
 
 	void TeleopPeriodic()
 	{
+		SmartDashboard::PutNumber("IMU_TotalYaw(ours)",         ahrs->GetAngle());
+		SmartDashboard::PutNumber("Encoder Distance", encoder.GetDistance());
+		SmartDashboard::PutNumber("Encoder Rate", encoder.GetRate());
+		SmartDashboard::PutNumber("Potentiometer Value", potentiometer.GetValue());
+		SmartDashboard::PutNumber("Potentiometer Voltage", potentiometer.GetVoltage());
+
+
+		if (stick.GetRawButton(4) && !lastButton4) {
+				if (setPoint == 1) {
+					setPoint = 4;
+				} else {
+					setPoint = 1;
+				}
+				pidController.SetSetpoint(setPoint);
+
+		}
+		lastButton4 = stick.GetRawButton(4);
+
 		if (stick.GetRawButton(5)) {
 			claw.Set(1, 0);
 		} else if (stick.GetRawButton(6)) {
