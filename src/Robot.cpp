@@ -1,38 +1,41 @@
 #include "WPILib.h"
 #include "AHRS.h"
 
+const double liftSetPointUp = 4.0;
+const double liftSetPointDown = 1.0;
 
 class Robot: public IterativeRobot
 {
-	AnalogInput potentiometer;
-	PIDController pidController;
-	Encoder encoder;
+	AnalogInput liftPot;
+	PIDController liftController;
+	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
-	Talon claw;
+	Talon collector;
 	Talon lift;
 	RobotDrive myRobot;
 	Joystick stick;
     AHRS *ahrs;
 	LiveWindow *lw;
-	int autoLoopCounter;
-	bool lastButton4;
-	double setPoint;
+	bool liftLastButton;
+	double liftSetPoint;
+	int autonState;
+
 
 public:
 	Robot() :
-		potentiometer(0),
-		pidController(.5, .2, 0, &potentiometer, &lift),
-		encoder(0, 1, false, Encoder::k4X),
+		liftPot(0),
+		liftController(.2, 0.0, 0.0, &liftPot, &lift),
+		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
-		claw(5),
+		collector(5),
 		lift(4),
 		myRobot(2, 3, 0, 1),
 		stick(0),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
-		autoLoopCounter(0),
-		lastButton4(false),
-		setPoint(1)
+		liftLastButton(false),
+		liftSetPoint(liftSetPointUp),
+		autonState(0)
 	{
 		myRobot.SetExpiration(0.1);
 		myRobot.SetMaxOutput(.5);
@@ -40,10 +43,10 @@ public:
 		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
-		encoder.SetSamplesToAverage(5);
-		// encoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
-		encoder.SetDistancePerPulse(1.0 / 360.0);
-		encoder.SetMinRate(1.0);
+		driveEncoder.SetSamplesToAverage(5);
+		// driveEncoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
+		driveEncoder.SetDistancePerPulse(1.0 / 360.0);
+		driveEncoder.SetMinRate(1.0);
 
 	}
 private:
@@ -56,7 +59,7 @@ private:
 			/* Alternatively:  I2C::Port::kMXP, SerialPort::Port::kMXP or SerialPort::Port::kUSB */
 			/* See http://navx-mxp.kauailabs.com/guidance/selecting-an-interface/ for details.   */
 			ahrs = new AHRS(SPI::Port::kMXP);
-		} catch (std::exception ex ) {
+		} catch (std::exception ex) {
 			std::string err_string = "Error instantiating navX MXP:  ";
 			err_string += ex.what();
 			DriverStation::ReportError(err_string.c_str());
@@ -67,68 +70,89 @@ private:
 		CameraServer::GetInstance()->SetQuality(50);
 		//the camera name (ex "cam0") can be found through the roborio web interface
 		CameraServer::GetInstance()->StartAutomaticCapture("cam0");
-		pidController.Enable(); //begin
 	}
 	void AutonomousInit()
 	{
-		autoLoopCounter = 0;
+		autonState = 0;
 		ahrs->Reset();
+		driveEncoder.Reset();
+
+		// start controlling the lift
+		liftSetPoint = liftSetPointUp;
+		liftController.SetSetpoint(liftSetPoint);
+		liftController.Enable();
 	}
 
 	void AutonomousPeriodic()
 	{
-        SmartDashboard::PutNumber("IMU_TotalYaw(ours)",         ahrs->GetAngle());
-        SmartDashboard::PutNumber("Encoder Distance", encoder.GetDistance());
-        SmartDashboard::PutNumber("Encoder Rate", encoder.GetRate());
-        SmartDashboard::PutNumber("Potentiometer Value", potentiometer.GetValue());
-        SmartDashboard::PutNumber("Potentiometer Voltage", potentiometer.GetVoltage());
+        SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
+        SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
+        SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
+        SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 
-		if(1) {
-			float angleError = ahrs->GetAngle();
-			if (angleError > 180) {
-				angleError = angleError-360;
+		/*
+		float angleError = ahrs->GetAngle();
+		if (angleError > 180) {
+			angleError = angleError-360;
+		}
+		angleError = angleError*.01;
+		//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
+		myRobot.Drive(-.5, -angleError);
+		*/
+
+        if (autonState == 0){
+			// drive forward for a specified distance
+			myRobot.Drive(1.0, 0.0);
+			 if (driveEncoder.GetDistance() > 5) {
+				myRobot.Drive(0.0, 0.0);
+				autonState++;
 			}
-			angleError = angleError*.01;
-			//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
-			myRobot.Drive(-.5, -angleError);
-			autoLoopCounter++;
-		} else {
-			myRobot.Drive(0.0, 0.0);
+		}
+
+		if (autonState == 1){
+			/// turn to a specified angle
+			myRobot.Drive(1.0, 0.5);
+			if (liftPot.GetVoltage() > 3) {
+				myRobot.Drive(0.0, 0.0);
+				autonState++;
+			}
 		}
 	}
 
 	void TeleopInit()
 	{
-
+		liftLastButton = false;
 	}
 
 	void TeleopPeriodic()
 	{
-		SmartDashboard::PutNumber("IMU_TotalYaw(ours)",         ahrs->GetAngle());
-		SmartDashboard::PutNumber("Encoder Distance", encoder.GetDistance());
-		SmartDashboard::PutNumber("Encoder Rate", encoder.GetRate());
-		SmartDashboard::PutNumber("Potentiometer Value", potentiometer.GetValue());
-		SmartDashboard::PutNumber("Potentiometer Voltage", potentiometer.GetVoltage());
+		SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
+		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
+		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
+		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 
-
-		if (stick.GetRawButton(4) && !lastButton4) {
-				if (setPoint == 1) {
-					setPoint = 4;
-				} else {
-					setPoint = 1;
-				}
-				pidController.SetSetpoint(setPoint);
+		// Control the lift arm motor
+		if (!liftLastButton && stick.GetRawButton(4)) {
+			if (liftSetPoint == liftSetPointUp) {
+				liftSetPoint = liftSetPointDown;
+			} else {
+				liftSetPoint = liftSetPointUp;
+			}
+			liftController.SetSetpoint(liftSetPoint);
 
 		}
-		lastButton4 = stick.GetRawButton(4);
+		liftLastButton = stick.GetRawButton(4);
 
+		// Control the collector
 		if (stick.GetRawButton(5)) {
-			claw.Set(1, 0);
+			collector.Set(1.0, 0);
 		} else if (stick.GetRawButton(6)) {
-			claw.Set(-1, 0);
+			collector.Set(-1.0, 0);
 		} else {
-			claw.Disable();
+			collector.Disable();
 		}
+
+		// Drive
 		//myRobot.TankDrive(stick.GetRawAxis(1),stick.GetRawAxis(5));
 		myRobot.ArcadeDrive(stick); // drive with arcade style (use right stick)
 	}
@@ -137,6 +161,7 @@ private:
 	{
 		lw->Run();
 	}
+
 };
 
 START_ROBOT_CLASS(Robot)
