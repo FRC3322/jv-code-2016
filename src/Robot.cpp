@@ -102,9 +102,8 @@ private:
 
         if (autonState == 0){
 			// drive forward for a specified distance
-			myRobot.Drive(1.0, 0.0);
+			DriveGyro (0.5, 0);
 			 if (driveEncoder.GetDistance() > 5) {
-				myRobot.Drive(0.0, 0.0);
 				autonState++;
 			}
 		}
@@ -112,11 +111,23 @@ private:
 		if (autonState == 1){
 			/// turn to a specified angle
 			myRobot.Drive(1.0, 0.5);
-			if (liftPot.GetVoltage() > 3) {
-				myRobot.Drive(0.0, 0.0);
+			if (ahrs->GetAngle() > 90) {
 				autonState++;
+				driveEncoder.Reset();
 			}
 		}
+
+        if (autonState == 2){
+			// drive forward for a specified distance
+			DriveGyro (0.5, 90);
+			 if (driveEncoder.GetDistance() > 5) {
+				autonState++;
+				myRobot.Drive (0,0);
+			 }
+        }
+        if (autonState ==3){
+        	collector.Set(1.0, 0);
+        }
 	}
 
 	void TeleopInit()
@@ -162,6 +173,16 @@ private:
 		lw->Run();
 	}
 
+	void DriveGyro(double outputMagnitude, double angle)
+	{
+		float angleError = ahrs->GetAngle()-angle;
+		if (angleError > 180) {
+			angleError = angleError-360;
+		}
+		angleError = angleError*.01;
+		//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
+		myRobot.Drive(outputMagnitude, -angleError);
+	}
 };
 
 START_ROBOT_CLASS(Robot)
