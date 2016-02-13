@@ -8,6 +8,7 @@ class Robot: public IterativeRobot
 {
 	AnalogInput liftPot;
 	PIDController liftController;
+	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
 	Talon collector;
@@ -25,6 +26,7 @@ public:
 	Robot() :
 		liftPot(0),
 		liftController(.2, 0.0, 0.0, &liftPot, &lift),
+		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
 		collector(5),
@@ -85,11 +87,7 @@ private:
 
 	void AutonomousPeriodic()
 	{
-        SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
-        SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
-        SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
-        SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
-
+        SmartDash();
 		/*
 		float angleError = ahrs->GetAngle();
 		if (angleError > 180) {
@@ -103,7 +101,7 @@ private:
         if (autonState == 0){
 			// drive forward for a specified distance
 			DriveGyro (0.5, 0);
-			 if (driveEncoder.GetDistance() > 5) {
+			 if (driveEncoder.GetDistance() > 5 && ultrasonic.GetVoltage() < 2) {
 				autonState++;
 			}
 		}
@@ -137,10 +135,7 @@ private:
 
 	void TeleopPeriodic()
 	{
-		SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
-		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
-		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
-		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
+		SmartDash();
 
 		// Control the lift arm motor
 		if (!liftLastButton && stick.GetRawButton(4)) {
@@ -182,6 +177,14 @@ private:
 		angleError = angleError*.01;
 		//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
 		myRobot.Drive(outputMagnitude, -angleError);
+	}
+	void SmartDash(){
+
+		SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
+		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
+		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
+		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
+		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetVoltage());
 	}
 };
 
