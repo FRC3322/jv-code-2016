@@ -20,6 +20,7 @@ class Robot: public IterativeRobot
 	bool liftLastButton;
 	double liftSetPoint;
 	int autonState;
+	int autonCount;
 
 
 public:
@@ -37,7 +38,8 @@ public:
 		lw(LiveWindow::GetInstance()),
 		liftLastButton(false),
 		liftSetPoint(liftSetPointUp),
-		autonState(0)
+		autonState(0),
+		autonCount(0)
 	{
 		myRobot.SetExpiration(0.1);
 		myRobot.SetMaxOutput(.5);
@@ -76,6 +78,7 @@ private:
 	void AutonomousInit()
 	{
 		autonState = 0;
+		autonCount = 0;
 		ahrs->Reset();
 		driveEncoder.Reset();
 
@@ -87,6 +90,7 @@ private:
 
 	void AutonomousPeriodic()
 	{
+		autonCount++;
         SmartDash();
 		/*
 		float angleError = ahrs->GetAngle();
@@ -109,6 +113,7 @@ private:
 		if (autonState == 1){
 			/// turn to a specified angle
 			myRobot.Drive(1.0, 0.5);
+			//myRobot.Drive(0.5,1.0);
 			if (ahrs->GetAngle() > 90) {
 				autonState++;
 				driveEncoder.Reset();
@@ -118,7 +123,7 @@ private:
         if (autonState == 2){
 			// drive forward for a specified distance
 			DriveGyro (0.5, 90);
-			 if (driveEncoder.GetDistance() > 5) {
+			 if (ultrasonic.GetVoltage() < 2) {
 				autonState++;
 				myRobot.Drive (0,0);
 			 }
@@ -151,9 +156,9 @@ private:
 
 		// Control the collector
 		if (stick.GetRawButton(5)) {
-			collector.Set(1.0, 0);
+			collector.Set(0.5, 0);
 		} else if (stick.GetRawButton(6)) {
-			collector.Set(-1.0, 0);
+			collector.Set(-0.5, 0);
 		} else {
 			collector.Disable();
 		}
@@ -184,7 +189,7 @@ private:
 		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
-		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetVoltage());
+		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 	}
 };
 
