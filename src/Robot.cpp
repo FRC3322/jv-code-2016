@@ -3,6 +3,7 @@
 
 const double liftSetPointUp = 4.0;
 const double liftSetPointDown = 1.0;
+const int ticksPerSecond = 50;
 
 class Robot: public IterativeRobot
 {
@@ -11,16 +12,17 @@ class Robot: public IterativeRobot
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
-	Talon collector;
+	Talon shooter;
 	Talon lift;
 	RobotDrive myRobot;
-	Joystick stick;
+	Joystick driveStick;
+	Joystick operatorStick;
     AHRS *ahrs;
 	LiveWindow *lw;
 	bool liftLastButton;
 	double liftSetPoint;
 	int autonState;
-	int autonCount;
+	int autonTimer;
 
 
 public:
@@ -30,16 +32,17 @@ public:
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
-		collector(5),
+		shooter(5),
 		lift(4),
 		myRobot(2, 3, 0, 1),
-		stick(0),
+		driveStick(0),
+		operatorStick(1),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
 		liftLastButton(false),
 		liftSetPoint(liftSetPointUp),
 		autonState(0),
-		autonCount(0)
+		autonTimer(0)
 	{
 		myRobot.SetExpiration(0.1);
 		myRobot.SetMaxOutput(.5);
@@ -47,6 +50,7 @@ public:
 		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
+		driveEncoder.SetReverseDirection(true);
 		driveEncoder.SetSamplesToAverage(5);
 		// driveEncoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
 		driveEncoder.SetDistancePerPulse(1.0 / 360.0);
@@ -78,7 +82,7 @@ private:
 	void AutonomousInit()
 	{
 		autonState = 0;
-		autonCount = 0;
+		autonTimer = 0;
 		ahrs->Reset();
 		driveEncoder.Reset();
 
@@ -90,46 +94,42 @@ private:
 
 	void AutonomousPeriodic()
 	{
-		autonCount++;
+		autonTimer++;
         SmartDash();
-		/*
-		float angleError = ahrs->GetAngle();
-		if (angleError > 180) {
-			angleError = angleError-360;
-		}
-		angleError = angleError*.01;
-		//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
-		myRobot.Drive(-.5, -angleError);
-		*/
 
-        if (autonState == 0){
+        if (autonState == 0) {
 			// drive forward for a specified distance
-			DriveGyro (0.5, 0);
-			 if (driveEncoder.GetDistance() > 5 && ultrasonic.GetVoltage() < 2) {
-				autonState++;
-			}
-		}
+			DriveGyro (-0.5, 0);
 
-		if (autonState == 1){
-			/// turn to a specified angle
-			myRobot.Drive(1.0, 0.5);
-			//myRobot.Drive(0.5,1.0);
-			if (ahrs->GetAngle() > 90) {
-				autonState++;
-				driveEncoder.Reset();
-			}
-		}
-
-        if (autonState == 2){
-			// drive forward for a specified distance
-			DriveGyro (0.5, 90);
-			 if (ultrasonic.GetVoltage() < 2) {
-				autonState++;
+			// if (driveEncoder.GetDistance() > 3) {
+			if (autonTimer > 5 * ticksPerSecond) {
 				myRobot.Drive (0,0);
+				autonState++;
+			}
+		}
+
+		if (autonState == 1) {
+		  //turn to a specified angle
+			myRobot.Drive (-.5, 1);
+			if (GetAngle() > 90) {
+				myRobot.Drive (0,0);
+				driveEncoder.Reset();
+				autonTimer = 0;
+				autonState++;
+			}
+		}
+
+        if (autonState == 2) {
+			// drive forward for a specified distance
+        	DriveGyro(-0.5, 90);
+			 // if (driveEncoder.GetDistance() > 10) {
+        	if (autonTimer > 3 * ticksPerSecond) {
+				myRobot.Drive (0,0);
+				autonState++;
 			 }
         }
-        if (autonState ==3){
-        	collector.Set(1.0, 0);
+        if (autonState == 3) {
+        	shooter.Set(1.0, 0);
         }
 	}
 
@@ -143,29 +143,36 @@ private:
 		SmartDash();
 
 		// Control the lift arm motor
-		if (!liftLastButton && stick.GetRawButton(4)) {
+		if (operatorStick.GetRawButton(1)) {
+			lift.Set(0.3, 0);
+		} else if (operatorStick.GetRawButton(2)) {
+			lift.Set(-0.3, 0);
+		} else {
+			lift.Disable();
+		}
+		/*
+		if (!liftLastButton && operatorStick.GetRawButton(1)) {
 			if (liftSetPoint == liftSetPointUp) {
 				liftSetPoint = liftSetPointDown;
 			} else {
 				liftSetPoint = liftSetPointUp;
 			}
 			liftController.SetSetpoint(liftSetPoint);
-
 		}
-		liftLastButton = stick.GetRawButton(4);
+		liftLastButton = operatorStick.GetRawButton(1);
+		*/
 
-		// Control the collector
-		if (stick.GetRawButton(5)) {
-			collector.Set(0.5, 0);
-		} else if (stick.GetRawButton(6)) {
-			collector.Set(-0.5, 0);
+		// Control the shooter
+		if (operatorStick.GetRawButton(5)) {
+			shooter.Set(0.5, 0);
+		} else if (operatorStick.GetRawButton(6)) {
+			shooter.Set(-0.5, 0);
 		} else {
-			collector.Disable();
+			shooter.Disable();
 		}
 
-		// Drive
-		//myRobot.TankDrive(stick.GetRawAxis(1),stick.GetRawAxis(5));
-		myRobot.ArcadeDrive(stick); // drive with arcade style (use right stick)
+		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
+		myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
 	}
 
 	void TestPeriodic()
@@ -175,22 +182,28 @@ private:
 
 	void DriveGyro(double outputMagnitude, double angle)
 	{
-		float angleError = ahrs->GetAngle()-angle;
-		if (angleError > 180) {
-			angleError = angleError-360;
-		}
+		float angleError = GetAngle() - angle;
 		angleError = angleError*.01;
-		//myRobot.SetLeftRightMotorOutputs(angleError, -angleError);
 		myRobot.Drive(outputMagnitude, -angleError);
 	}
 	void SmartDash(){
 
 		SmartDashboard::PutNumber("IMU Yaw", ahrs->GetAngle());
-		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
+		SmartDashboard::PutNumber("Encoder Distance", -driveEncoder.GetDistance());
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 	}
+
+	float GetAngle()
+	{
+		float angle = ahrs->GetAngle();
+		if (angle > 180) {
+			angle = angle-360;
+		}
+		return(angle);
+	}
+
 };
 
 START_ROBOT_CLASS(Robot)
