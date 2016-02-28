@@ -11,7 +11,7 @@ const double turnAngle = 90.0;
 class Robot: public IterativeRobot
 {
 	AnalogInput liftPot;
-	// PIDController liftController;
+	PIDController liftController;
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
@@ -30,7 +30,7 @@ class Robot: public IterativeRobot
 public:
 	Robot() :
 		liftPot(0),
-		// liftController(.2, 0.0, 0.0, &liftPot, &lift),
+		liftController(.2, 0.0, 0.0, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -158,55 +158,58 @@ private:
 		SmartDash();
 
 		// Control the lift arm motor
+		if (driveStick.GetRawButton(1)) {
+			if (liftPot.GetVoltage() > 1.1) {
+				lift.Set (-1,0);
+			}
+			if (liftPot.GetVoltage() < 0.9) {
+				lift.Set (1,0);
+			}
+			if ((liftPot.GetVoltage() > 0.9) && liftPot.GetVoltage() < 1.1) {
+				lift.Disable();
+			}
+		}
+
+		if (driveStick.GetRawButton(2)) {
+			if (liftPot.GetVoltage() > 2.1) {
+				lift.Set (-1,0);
+			}
+			if (liftPot.GetVoltage() < 1.9) {
+				lift.Set (1,0);
+			}
+			if ((liftPot.GetVoltage() > 1.9) && liftPot.GetVoltage() < 2.1) {
+				lift.Disable();
+			}
+		}
 
 		if (driveStick.GetRawButton(4)) {
-			lift.Set(0.65, 0);
-		} else if (driveStick.GetRawButton(1)) {
-			lift.Set(-0.5, 0);
-		} else {
-			lift.Set(0, 0);
-		}
-/*
-		if (operatorStick.GetRawButton(1)) {
-			while (liftPot.GetVoltage() > 1){
-			lift.Set(-0.2, 0);
-		}
-			lift.StopMotor();
-		}
-		if (operatorStick.GetRawButton(2)){
-			while (liftPot.GetVoltage() > 2){
-			lift.Set(-0.2,0);
-		}
-			lift.StopMotor();
-		}
-		if (operatorStick.GetRawButton(3)) {
-			while (liftPot.GetVoltage() < 2){
-			lift.Set(0.2, 0);
-		}
-			lift.StopMotor();
-		}
-		if  (operatorStick.GetRawButton(4)) {
-			while (liftPot.GetVoltage() < 3){
-			lift.Set(0.2, 0);
-		}
-			lift.StopMotor();
-		}
-*/
-/*
-		if (!liftLastButton && operatorStick.GetRawButton(1)) {
-			if (liftSetPoint == liftSetPointUp) {
-				liftSetPoint = liftSetPointDown;
-			} else {
-				liftSetPoint = liftSetPointUp;
+			if (liftPot.GetVoltage() > 3.1) {
+				lift.Set (-1,0);
 			}
-			liftController.SetSetpoint(liftSetPoint);
+			if (liftPot.GetVoltage() < 2.9) {
+				lift.Set (1,0);
+			}
+			if ((liftPot.GetVoltage() > 2.9) && liftPot.GetVoltage() < 3.1) {
+				lift.Disable();
+			}
 		}
-		liftLastButton = operatorStick.GetRawButton(1);
-*/
+
+		if (driveStick.GetRawButton(3)) {
+			if (liftPot.GetVoltage() > 4.1) {
+				lift.Set (-1,0);
+			}
+			if (liftPot.GetVoltage() < 3.9) {
+				lift.Set (1,0);
+			}
+			if ((liftPot.GetVoltage() > 3.9) && liftPot.GetVoltage() < 4.1) {
+				lift.Disable();
+			}
+		}
+
 		// Control the shooter
-		if (driveStick.GetRawAxis(3)) {
+		if (driveStick.GetRawAxis(2)) {
 			shooter.Set(1, 0);
-		} else if (driveStick.GetRawAxis(2)) {
+		} else if (driveStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
 		} else {
 			shooter.StopMotor();
