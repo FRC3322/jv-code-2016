@@ -33,7 +33,7 @@ class Robot: public IterativeRobot
 public:
 	Robot() :
 		liftPot(0),
-		liftController(-0.5, 0.0, 0.0, &liftPot, &lift),
+		liftController(-0.6, 0.0, 0.0, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
