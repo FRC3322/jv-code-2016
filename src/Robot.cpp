@@ -3,10 +3,13 @@
 
 const double liftSetPointUp = 4.0;
 const double liftSetPointDown = 1.0;
-const int ticksPerSecond = 44;
+const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
-const double turnDistance = 2.0;
+const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
+const double liftDown = 4.0;
+const double liftBack = 2.75;
+const double liftVertical = 3.5;
 
 class Robot: public IterativeRobot
 {
@@ -19,10 +22,10 @@ class Robot: public IterativeRobot
 	Talon lift;
 	RobotDrive myRobot;
 	Joystick driveStick;
+	Joystick techStick;
     AHRS *ahrs;
 	LiveWindow *lw;
-	bool liftLastButton;
-	double liftSetPoint;
+	double multiplier;
 	int autonState;
 	int autonTimer;
 
@@ -30,7 +33,7 @@ class Robot: public IterativeRobot
 public:
 	Robot() :
 		liftPot(0),
-		liftController(.2, 0.0, 0.0, &liftPot, &lift),
+		liftController(-0.5, 0.0, 0.0, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -38,10 +41,10 @@ public:
 		lift(4),
 		myRobot(2,3,0,1),
 		driveStick(0),
+		techStick(1),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
-		liftLastButton(false),
-		liftSetPoint(liftSetPointUp),
+		multiplier(0),
 		autonState(0),
 		autonTimer(0)
 	{
@@ -56,7 +59,6 @@ public:
 		// driveEncoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
 		driveEncoder.SetDistancePerPulse(1.0 / 360.0);
 		driveEncoder.SetMinRate(1.0);
-
 	}
 private:
 	void RobotInit()
@@ -94,7 +96,6 @@ private:
 		// liftController.SetSetpoint(liftSetPoint);
 		// liftController.Enable();
 	}
-
 	void AutonomousPeriodic()
 	{
 		SmartDash();
@@ -135,7 +136,7 @@ private:
 		if (autonState == 3) {
 			DriveGyro (-0.5, turnAngle);
 
-	        if (driveEncoder.GetDistance() > turnDistance) {
+	        if (driveEncoder.GetDistance() > afterTurnForwardDrive) {
 	        	DriveGyro (0,turnAngle);
 	            autonState++;
 	        }
@@ -147,76 +148,68 @@ private:
 			shooter.Set (1,0);
 		}
 	}
-
 	void TeleopInit()
 	{
-		liftLastButton = false;
+		multiplier=.75;
+		lift.Disable();
+		shooter.Disable();
 	}
-
 	void TeleopPeriodic()
 	{
 		SmartDash();
 
 		// Control the lift arm motor
-		if (driveStick.GetRawButton(1)) {
-			if (liftPot.GetVoltage() > 1.1) {
-				lift.Set (-1,0);
-			}
-			if (liftPot.GetVoltage() < 0.9) {
-				lift.Set (1,0);
-			}
-			if ((liftPot.GetVoltage() > 0.9) && liftPot.GetVoltage() < 1.1) {
-				lift.Disable();
-			}
+
+		if (techStick.GetRawButton(1)) {
+			liftController.Enable();
+			liftController.SetSetpoint(liftDown);
 		}
 
-		if (driveStick.GetRawButton(2)) {
-			if (liftPot.GetVoltage() > 2.1) {
-				lift.Set (-1,0);
-			}
-			if (liftPot.GetVoltage() < 1.9) {
-				lift.Set (1,0);
-			}
-			if ((liftPot.GetVoltage() > 1.9) && liftPot.GetVoltage() < 2.1) {
-				lift.Disable();
-			}
+		if (techStick.GetRawButton(2)) {
+			liftController.Enable();
+			liftController.SetSetpoint(liftVertical);
 		}
 
-		if (driveStick.GetRawButton(4)) {
-			if (liftPot.GetVoltage() > 3.1) {
-				lift.Set (-1,0);
-			}
-			if (liftPot.GetVoltage() < 2.9) {
-				lift.Set (1,0);
-			}
-			if ((liftPot.GetVoltage() > 2.9) && liftPot.GetVoltage() < 3.1) {
-				lift.Disable();
-			}
+		if (techStick.GetRawButton(3)) {
+			liftController.Enable();
+			liftController.SetSetpoint(liftBack);
 		}
 
-		if (driveStick.GetRawButton(3)) {
-			if (liftPot.GetVoltage() > 4.1) {
-				lift.Set (-1,0);
-			}
-			if (liftPot.GetVoltage() < 3.9) {
-				lift.Set (1,0);
-			}
-			if ((liftPot.GetVoltage() > 3.9) && liftPot.GetVoltage() < 4.1) {
-				lift.Disable();
-			}
+		if (techStick.GetRawButton(10)) {
+			liftController.Disable();
 		}
 
 		// Control the shooter
-		if (driveStick.GetRawAxis(2)) {
+		if (techStick.GetRawAxis(2)) {
 			shooter.Set(1, 0);
-		} else if (driveStick.GetRawAxis(3)) {
+		} else if (techStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
+		} else if (techStick.GetRawButton(8)) {
+			shooter.Disable();
 		} else {
-			shooter.StopMotor();
+			shooter.Set(0.1, 0);
 		}
 
-		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
-		myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
+		if (techStick.GetRawButton(5)) {
+			liftController.Disable();
+			lift.Set(0.5,0);
+		}
+
+		if (techStick.GetRawButton(6)) {
+			lift.Set(-0.5,0);
+			liftController.Disable();
+		}
+
+		if(driveStick.GetRawButton(1)){
+			multiplier = 1;
+		}
+
+		if(driveStick.GetRawButton(3)){
+			multiplier=.75;
+		}
+
+		//myRobot.TankDrive(multiplier*driveStick.GetRawAxis(1),multiplier*driveStick.GetRawAxis(5));
+		myRobot.ArcadeDrive(multiplier*driveStick.GetY(),multiplier*driveStick.GetX()); // drive with arcade style (use right stick)
 	}
 	void TestPeriodic()
 	{
@@ -250,4 +243,3 @@ private:
 };
 
 START_ROBOT_CLASS(Robot)
-
