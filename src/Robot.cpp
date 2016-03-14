@@ -88,13 +88,8 @@ private:
 		autonTimer = 0;
 		ahrs->Reset();
 		driveEncoder.Reset();
-		shooter.StopMotor();
-		lift.StopMotor();
-
-		// start controlling the lift
-		// liftSetPoint = liftSetPointUp;
-		// liftController.SetSetpoint(liftSetPoint);
-		// liftController.Enable();
+		shooter.Disable();
+		lift.Disable();
 	}
 	void AutonomousPeriodic()
 	{
@@ -158,14 +153,13 @@ private:
 	{
 		SmartDash();
 
-		// Control the lift arm motor
-
-		if (techStick.GetRawButton(1)) {
+		// Control the arm automatically
+		if (techStick.GetRawButton(2)) {
 			liftController.Enable();
 			liftController.SetSetpoint(liftDown);
 		}
 
-		if (techStick.GetRawButton(2)) {
+		if (techStick.GetRawButton(4)) {
 			liftController.Enable();
 			liftController.SetSetpoint(liftVertical);
 		}
@@ -190,16 +184,18 @@ private:
 			shooter.Set(0.1, 0);
 		}
 
+		// Control the arm manually
 		if (techStick.GetRawButton(5)) {
 			liftController.Disable();
 			lift.Set(0.5,0);
 		}
 
 		if (techStick.GetRawButton(6)) {
-			lift.Set(-0.5,0);
 			liftController.Disable();
+			lift.Set(-0.5,0);
 		}
 
+		// Control the drive
 		if(driveStick.GetRawButton(1)){
 			multiplier = 1;
 		}
