@@ -28,12 +28,12 @@ class Robot: public IterativeRobot
 	double multiplier;
 	int autonState;
 	int autonTimer;
-
+	bool shooterState;
 
 public:
 	Robot() :
 		liftPot(0),
-		liftController(-0.6, 0.0, 0.0, &liftPot, &lift),
+		liftController(-0.5, 0.0, 0.0, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -46,7 +46,8 @@ public:
 		lw(LiveWindow::GetInstance()),
 		multiplier(0),
 		autonState(0),
-		autonTimer(0)
+		autonTimer(0),
+		shooterState(true)
 	{
 		myRobot.SetExpiration(0.1);
 		myRobot.SetMaxOutput(1);
@@ -135,7 +136,6 @@ private:
 	        	DriveGyro (0,turnAngle);
 	            autonState++;
 	        }
-
 		}
 
 		// shoot
@@ -145,6 +145,7 @@ private:
 	}
 	void TeleopInit()
 	{
+		shooterState=true;
 		multiplier=.75;
 		lift.Disable();
 		shooter.Disable();
@@ -158,17 +159,14 @@ private:
 			liftController.Enable();
 			liftController.SetSetpoint(liftDown);
 		}
-
 		if (techStick.GetRawButton(4)) {
 			liftController.Enable();
 			liftController.SetSetpoint(liftVertical);
 		}
-
 		if (techStick.GetRawButton(3)) {
 			liftController.Enable();
 			liftController.SetSetpoint(liftBack);
 		}
-
 		if (techStick.GetRawButton(10)) {
 			liftController.Disable();
 		}
@@ -178,10 +176,19 @@ private:
 			shooter.Set(1, 0);
 		} else if (techStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
-		} else if (techStick.GetRawButton(8)) {
+		}
+
+		if (techStick.GetRawButton(8)) {
+			shooterState=false;
+		}
+		if (techStick.GetRawButton(7)) {
+			shooterState=true;
+		}
+		if ((shooterState=true)) {
+			shooter.Set(0.1,0);
+		}
+		if ((shooterState=false)) {
 			shooter.Disable();
-		} else {
-			shooter.Set(0.1, 0);
 		}
 
 		// Control the arm manually
@@ -189,7 +196,6 @@ private:
 			liftController.Disable();
 			lift.Set(0.5,0);
 		}
-
 		if (techStick.GetRawButton(6)) {
 			liftController.Disable();
 			lift.Set(-0.5,0);
@@ -199,11 +205,9 @@ private:
 		if(driveStick.GetRawButton(1)){
 			multiplier = 1;
 		}
-
 		if(driveStick.GetRawButton(3)){
 			multiplier=.75;
 		}
-
 		//myRobot.TankDrive(multiplier*driveStick.GetRawAxis(1),multiplier*driveStick.GetRawAxis(5));
 		myRobot.ArcadeDrive(multiplier*driveStick.GetY(),multiplier*driveStick.GetX()); // drive with arcade style (use right stick)
 	}
@@ -218,15 +222,14 @@ private:
 		angleError = angleError*.02;
 		myRobot.Drive(outputMagnitude, -angleError);
 	}
-	void SmartDash(){
-
+	void SmartDash()
+	{
 		SmartDashboard::PutNumber("IMU Yaw", GetAngle());
 		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 	}
-
 	float GetAngle()
 	{
 		float angle = ahrs->GetAngle();
@@ -235,7 +238,6 @@ private:
 		}
 		return(angle);
 	}
-
 };
 
 START_ROBOT_CLASS(Robot)
