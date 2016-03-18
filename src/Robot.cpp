@@ -25,10 +25,12 @@ class Robot: public IterativeRobot
 	Joystick techStick;
     AHRS *ahrs;
 	LiveWindow *lw;
-	double multiplier;
+	bool driveFast;
 	int autonState;
 	int autonTimer;
-	bool shooterState;
+	bool shooterDefaultOn;
+	bool lastShooterToggleButton;
+	bool driveToggleButton;
 
 public:
 	Robot() :
@@ -44,13 +46,15 @@ public:
 		techStick(1),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
-		multiplier(0),
+		driveFast(true),
 		autonState(0),
 		autonTimer(0),
-		shooterState(true)
+		shooterDefaultOn(true),
+		lastShooterToggleButton(false),
+		driveToggleButton(false)
 	{
 		myRobot.SetExpiration(0.1);
-		myRobot.SetMaxOutput(1);
+		myRobot.SetMaxOutput(driveFast ? 1 : 0.5);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
@@ -145,8 +149,7 @@ private:
 	}
 	void TeleopInit()
 	{
-		shooterState=true;
-		multiplier=.75;
+		shooterDefaultOn=true;
 		lift.Disable();
 		shooter.Disable();
 	}
@@ -176,20 +179,17 @@ private:
 			shooter.Set(1, 0);
 		} else if (techStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
-		}
-
-		if (techStick.GetRawButton(8)) {
-			shooterState=false;
-		}
-		if (techStick.GetRawButton(7)) {
-			shooterState=true;
-		}
-		if ((shooterState=true)) {
+		} else if (shooterDefaultOn) {
 			shooter.Set(0.1,0);
-		}
-		if ((shooterState=false)) {
+		} else {
 			shooter.Disable();
 		}
+
+		// toggle the default state of the shooter
+		if (!lastShooterToggleButton && techStick.GetRawButton(8)) {
+			shooterDefaultOn = !shooterDefaultOn;
+		}
+		lastShooterToggleButton = techStick.GetRawButton(8);
 
 		// Control the arm manually
 		if (techStick.GetRawButton(5)) {
@@ -202,14 +202,13 @@ private:
 		}
 
 		// Control the drive
-		if(driveStick.GetRawButton(1)){
-			multiplier = 1;
+		if (!driveToggleButton && driveStick.GetRawButton(1)) {
+			driveFast = !driveFast;
+			myRobot.SetMaxOutput(driveFast ? 1.0 : 0.5);
 		}
-		if(driveStick.GetRawButton(3)){
-			multiplier=.75;
-		}
-		//myRobot.TankDrive(multiplier*driveStick.GetRawAxis(1),multiplier*driveStick.GetRawAxis(5));
-		myRobot.ArcadeDrive(multiplier*driveStick.GetY(),multiplier*driveStick.GetX()); // drive with arcade style (use right stick)
+
+		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
+		myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
 	}
 	void TestPeriodic()
 	{
