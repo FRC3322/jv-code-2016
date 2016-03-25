@@ -203,22 +203,18 @@ private:
 			lift.Set(-0.5,0);
 		}
 
-		// Control the drive
-		if (!driveToggleButton && driveStick.GetRawButton(1) /* && timer > driveToggleTime + 10 */) {
+		// Control the drive speed
+		if (!driveToggleButton && driveStick.GetRawButton(1)) {
 			driveFast = !driveFast;
-			// driveToggleButtonTime = timer;
 			// myRobot.SetMaxOutput(driveFast ? 1.0 : 0.5);
 		}
 		driveToggleButton = driveStick.GetRawButton(1);
 
-		double yaxis = -driveStick.GetY();
-		double xaxis = driveStick.GetX();
+		// Compute power for the drive motors (do this manually so we can adjust for different strength motors)
+		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetY());
+		double turn = 0.9 * driveStick.GetX();
 
-		double basePower = (driveFast ? 0.75 : 0.3) * yaxis;
-
-		double turn = 0.9 * xaxis;
-
-		double leftPower = (basePower + turn) * 0.9;
+		double leftPower = (basePower + turn) * 0.9; // left motor is stronger?
 		double rightPower = basePower - turn;
 		myRobot.SetLeftRightMotorOutputs(leftPower, rightPower);
 
