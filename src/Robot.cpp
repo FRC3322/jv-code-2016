@@ -27,7 +27,7 @@ class Robot: public IterativeRobot
 	LiveWindow *lw;
 	bool driveFast;
 	int autonState;
-	int autonTimer;
+	int timer;
 	bool shooterDefaultOn;
 	bool lastShooterToggleButton;
 	bool driveToggleButton;
@@ -48,17 +48,17 @@ public:
 		lw(LiveWindow::GetInstance()),
 		driveFast(true),
 		autonState(0),
-		autonTimer(0),
+		timer(0),
 		shooterDefaultOn(true),
 		lastShooterToggleButton(false),
 		driveToggleButton(false)
 	{
 		myRobot.SetExpiration(0.1);
-		myRobot.SetMaxOutput(driveFast ? 1 : 0.5);
-		myRobot.SetInvertedMotor(RobotDrive::kFrontLeftMotor, true);
-		myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
-		myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
-		myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
+		// myRobot.SetMaxOutput(driveFast ? 1 : 0.5);
+		//myRobot.SetInvertedMotor(RobotDrive::kFrontLeftMotor, true);
+		//myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
+		//myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
+		//myRobot.SetInvertedMotor(RobotDrive::kRearRightMotor, true);
 		driveEncoder.SetReverseDirection(true);
 		driveEncoder.SetSamplesToAverage(5);
 		// driveEncoder.SetDistancePerPulse(1.0 / 360.0 * 2.0 * 3.1415 * 1.5);
@@ -90,7 +90,7 @@ private:
 	void AutonomousInit()
 	{
 		autonState = 0;
-		autonTimer = 0;
+		timer = 0;
 		ahrs->Reset();
 		driveEncoder.Reset();
 		shooter.Disable();
@@ -99,13 +99,13 @@ private:
 	void AutonomousPeriodic()
 	{
 		SmartDash();
-		autonTimer++;
+		timer++;
 
 		// lower lift
 		if (autonState == 0) {
 			lift.Set(-0.5, 0);
 
-			if (autonTimer > 5 * ticksPerSecond) {
+			if (timer > 5 * ticksPerSecond) {
 				lift.Set(0, 0);
 				autonState++;
 			}
@@ -149,6 +149,7 @@ private:
 	}
 	void TeleopInit()
 	{
+		timer = 0;
 		shooterDefaultOn=true;
 		lift.Disable();
 		shooter.Disable();
@@ -156,6 +157,7 @@ private:
 	void TeleopPeriodic()
 	{
 		SmartDash();
+		timer++;
 
 		// Control the arm automatically
 		if (techStick.GetRawButton(2)) {
@@ -202,13 +204,27 @@ private:
 		}
 
 		// Control the drive
-		if (!driveToggleButton && driveStick.GetRawButton(1)) {
+		if (!driveToggleButton && driveStick.GetRawButton(1) /* && timer > driveToggleTime + 10 */) {
 			driveFast = !driveFast;
-			myRobot.SetMaxOutput(driveFast ? 1.0 : 0.5);
+			// driveToggleButtonTime = timer;
+			// myRobot.SetMaxOutput(driveFast ? 1.0 : 0.5);
 		}
+		driveToggleButton = driveStick.GetRawButton(1);
 
+		double yaxis = -driveStick.GetY();
+		double xaxis = driveStick.GetX();
+
+		double basePower = (driveFast ? 0.75 : 0.3) * yaxis;
+
+		double turn = 0.9 * xaxis;
+
+		double leftPower = (basePower + turn) * 0.9;
+		double rightPower = basePower - turn;
+		myRobot.SetLeftRightMotorOutputs(leftPower, rightPower);
+
+		//myRobot.ArcadeDrive(driveStick.GetY(), driveStick.GetX());
 		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
-		myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
+		//myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
 	}
 	void TestPeriodic()
 	{
@@ -228,6 +244,8 @@ private:
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
+		SmartDashboard::PutNumber("X Value", driveStick.GetX());
+		SmartDashboard::PutNumber("Y Value", driveStick.GetY());
 	}
 	float GetAngle()
 	{
