@@ -182,12 +182,12 @@ private:
 		} else if (techStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
 		} else if (shooterDefaultOn) {
-			shooter.Set(0.1,0);
+			shooter.Set(0.1, 0);
 		} else {
 			shooter.Disable();
 		}
 
-		// toggle the default state of the shooter
+		// Control the default state of the shooter
 		if (!lastShooterToggleButton && techStick.GetRawButton(8)) {
 			shooterDefaultOn = !shooterDefaultOn;
 		}
