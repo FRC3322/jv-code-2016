@@ -25,7 +25,7 @@ class Robot: public IterativeRobot
 	Joystick techStick;
     AHRS *ahrs;
 	LiveWindow *lw;
-	bool driveFast;
+	bool driveSlow;
 	int autonState;
 	int timer;
 	bool shooterDefaultOn;
@@ -46,7 +46,7 @@ public:
 		techStick(1),
         ahrs(NULL),
 		lw(LiveWindow::GetInstance()),
-		driveFast(true),
+		driveSlow(true),
 		autonState(0),
 		timer(0),
 		shooterDefaultOn(true),
@@ -54,7 +54,7 @@ public:
 		driveToggleButton(false)
 	{
 		myRobot.SetExpiration(0.1);
-		// myRobot.SetMaxOutput(driveFast ? 1 : 0.5);
+		// myRobot.SetMaxOutput(driveSlow ? 0.3 : 0.6);
 		//myRobot.SetInvertedMotor(RobotDrive::kFrontLeftMotor, true);
 		//myRobot.SetInvertedMotor(RobotDrive::kRearLeftMotor, true);
 		//myRobot.SetInvertedMotor(RobotDrive::kFrontRightMotor, true);
@@ -205,16 +205,16 @@ private:
 
 		// Control the drive speed
 		if (!driveToggleButton && driveStick.GetRawButton(1)) {
-			driveFast = !driveFast;
-			// myRobot.SetMaxOutput(driveFast ? 1.0 : 0.5);
+			driveSlow = !driveSlow;
+			// myRobot.SetMaxOutput(driveSlow ? 0.3 : 0.6);
 		}
 		driveToggleButton = driveStick.GetRawButton(1);
 
 		// Compute power for the drive motors (do this manually so we can adjust for different strength motors)
-		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetY());
+		double basePower = (driveSlow ? 0.3 : 0.6) * (-driveStick.GetY());
 		double turn = 0.9 * driveStick.GetX();
 
-		double leftPower = (basePower + turn) * 0.9; // left motor is stronger?
+		double leftPower = (basePower + turn) * 0.8; // left motor is stronger?
 		double rightPower = basePower - turn;
 		myRobot.SetLeftRightMotorOutputs(leftPower, rightPower);
 
