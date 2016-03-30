@@ -211,8 +211,8 @@ private:
 		driveToggleButton = driveStick.GetRawButton(1);
 
 		// Compute power for the drive motors (do this manually so we can adjust for different strength motors)
-		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetY());
-		double turn = 0.9 * driveStick.GetX();
+		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetRawAxis(1));
+		double turn = 0.9 * driveStick.GetRawAxis(4);
 
 		double leftPower = (basePower + turn) * 0.9; // left motor is stronger?
 		double rightPower = basePower - turn;
