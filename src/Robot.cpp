@@ -206,14 +206,15 @@ private:
 		// Control the drive speed
 		if (!driveToggleButton && driveStick.GetRawButton(1)) {
 			driveFast = !driveFast;
-			// myRobot.SetMaxOutput(driveFast ? 0.3 : 0.6);
+			// myRobot.SetMaxOutput(driveFast ? 0.6 : 0.3);
 		}
 		driveToggleButton = driveStick.GetRawButton(1);
 
 		// Compute power for the drive motors (do this manually so we can adjust for different strength motors)
 		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetRawAxis(1));
-		double turn = 0.9 * driveStick.GetRawAxis(4);
-		double leftPower = (basePower + turn) * 0.8; // left motor is stronger?
+		double turn = (driveFast ? 0.75 : 0.75) * driveStick.GetRawAxis(4);
+		double leftPower = (basePower + turn); // left motor is stronger?
+		leftPower *= (basePower > 0) ? 0.9 : 1.03;
 		double rightPower = basePower - turn;
 		myRobot.SetLeftRightMotorOutputs(leftPower, rightPower);
 
@@ -239,8 +240,8 @@ private:
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage", liftPot.GetVoltage());
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
-		SmartDashboard::PutNumber("X Value", driveStick.GetX());
-		SmartDashboard::PutNumber("Y Value", driveStick.GetY());
+		SmartDashboard::PutNumber("Speed", driveStick.GetRawAxis(1));
+		SmartDashboard::PutNumber("Turn", driveStick.GetRawAxis(4));
 	}
 	float GetAngle()
 	{
