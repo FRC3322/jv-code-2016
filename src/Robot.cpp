@@ -7,9 +7,9 @@ const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
-const double liftDown = 4.0;
-const double liftBack = 2.75;
-const double liftVertical = 3.5;
+const double liftDown = 3.7;
+const double liftBack = .91;
+const double liftVertical = 2.26;
 
 class Robot: public IterativeRobot
 {
@@ -35,7 +35,7 @@ class Robot: public IterativeRobot
 public:
 	Robot() :
 		liftPot(0),
-		liftController(-0.5, 0.0, 0.0, &liftPot, &lift),
+		liftController(0.2, 0.0, 0.0, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -160,19 +160,19 @@ private:
 		timer++;
 
 		// Control the arm automatically
-		if (techStick.GetRawButton(2)) {
+		if (techStick.GetRawButton(2)) { // B
 			liftController.Enable();
 			liftController.SetSetpoint(liftDown);
 		}
-		if (techStick.GetRawButton(4)) {
+		if (techStick.GetRawButton(4)) { // Y
 			liftController.Enable();
 			liftController.SetSetpoint(liftVertical);
 		}
-		if (techStick.GetRawButton(3)) {
+		if (techStick.GetRawButton(3)) { // X
 			liftController.Enable();
 			liftController.SetSetpoint(liftBack);
 		}
-		if (techStick.GetRawButton(10)) {
+		if (techStick.GetRawButton(10)) { // push down right stick
 			liftController.Disable();
 		}
 
@@ -194,13 +194,13 @@ private:
 		lastShooterToggleButton = techStick.GetRawButton(8);
 
 		// Control the arm manually
-		if (techStick.GetRawButton(5)) {
+		if (techStick.GetRawButton(5)) { // LB
 			liftController.Disable();
-			lift.Set(0.5,0);
+			lift.Set(0.5,0); // down
 		}
-		if (techStick.GetRawButton(6)) {
+		if (techStick.GetRawButton(6)) { // RB
 			liftController.Disable();
-			lift.Set(-0.5,0);
+			lift.Set(-0.5,0); // up
 		}
 
 		// Control the drive speed
