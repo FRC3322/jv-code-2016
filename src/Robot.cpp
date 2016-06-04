@@ -98,7 +98,7 @@ private:
 	}
 	void AutonomousPeriodic()
 	{
-		SmartDash();
+		SmartDash(0);
 		timer++;
 
 		// lower lift
@@ -152,13 +152,29 @@ private:
 		timer = 0;
 		shooterDefaultOn=true;
 		lift.Disable();
+		liftController.Disable();
 		shooter.Disable();
 	}
+
 	void TeleopPeriodic()
 	{
-		SmartDash();
 		timer++;
 
+
+
+		double liftAngle;
+		double liftPotSum = 0;
+
+		for (int i = 0; i < 10; i++){
+			liftPotSum+=liftPot.GetVoltage();
+		}
+		double liftPotAverage = liftPotSum / 10.0;
+		liftAngle = (liftPotAverage-liftDown)*90.0/(liftVertical-liftDown);
+		liftAngle = 0;
+		lift.Set(-0.3 * cos(liftAngle));
+
+
+/*
 		// Control the arm automatically
 		if (techStick.GetRawButton(2)) { // B
 			liftController.Enable();
@@ -175,6 +191,7 @@ private:
 		if (techStick.GetRawButton(10)) { // push down right stick
 			liftController.Disable();
 		}
+*/
 
 		// Control the shooter
 		if (techStick.GetRawAxis(2)) {
@@ -193,6 +210,7 @@ private:
 		}
 		lastShooterToggleButton = techStick.GetRawButton(8);
 
+/*
 		// Control the arm manually
 		if (techStick.GetRawButton(5)) { // LB
 			liftController.Disable();
@@ -202,6 +220,7 @@ private:
 			liftController.Disable();
 			lift.Set(-0.5,0); // up
 		}
+*/
 
 		// Control the drive speed
 		if (!driveToggleButton && driveStick.GetRawButton(1)) {
@@ -221,6 +240,9 @@ private:
 		//myRobot.ArcadeDrive(driveStick.GetY(), driveStick.GetX());
 		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
 		//myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
+
+		SmartDash(liftPotAverage);
+
 	}
 	void TestPeriodic()
 	{
@@ -233,7 +255,7 @@ private:
 		angleError = angleError*.02;
 		myRobot.Drive(outputMagnitude, -angleError);
 	}
-	void SmartDash()
+	void SmartDash(double liftPotAverage)
 	{
 		SmartDashboard::PutNumber("IMU Yaw", GetAngle());
 		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
@@ -242,6 +264,9 @@ private:
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 		SmartDashboard::PutNumber("Speed", driveStick.GetRawAxis(1));
 		SmartDashboard::PutNumber("Turn", driveStick.GetRawAxis(4));
+		double liftAngle;
+		liftAngle = (liftPotAverage-liftDown)*90.0/(liftVertical-liftDown);
+		SmartDashboard::PutNumber("Lift Angle", liftAngle);
 	}
 	float GetAngle()
 	{
