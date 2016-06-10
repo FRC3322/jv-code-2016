@@ -9,11 +9,11 @@ const double liftPotForward = 4.31;
 const double liftPotBack = 1.55;
 const double liftPotVertical = 2.62;
 
-enum LiftTargetEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_VERTICAL, AUTO_BACK, DISABLED};
+enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
 
 class Robot: public IterativeRobot
 {
-	LiftTargetEnum liftTarget;
+	LiftCommandEnum liftCommand;
 	AnalogInput liftPot;
 	double liftPotAverage;
 	double liftAngle;
@@ -36,7 +36,7 @@ class Robot: public IterativeRobot
 
 public:
 	Robot() :
-		liftTarget(AUTO_VERTICAL),
+		liftCommand(AUTO_VERTICAL),
 		liftPot(0),
 		liftPotAverage(0),
 		liftAngle(0),
@@ -98,7 +98,7 @@ private:
 		ahrs->Reset();
 		driveEncoder.Reset();
 		shooter.Disable();
-		liftTarget = AUTO_VERTICAL;
+		liftCommand = AUTO_FORWARD;
 	}
 	void AutonomousPeriodic()
 	{
@@ -155,7 +155,7 @@ private:
 		shooterDefaultOn=true;
 		lift.Disable();
 		shooter.Disable();
-		liftTarget = AUTO_VERTICAL;
+		liftCommand = AUTO_VERTICAL;
 	}
 
 	void TeleopPeriodic()
@@ -163,24 +163,28 @@ private:
 		SmartDash();
 
 		// Control the lift arm
+
+		// The manual lift buttons have no lasting effect.  Once you release a manual
+		// lift button, the lift arm is set to gravity compensation.  In contrast,
+		// the auto and disable lift buttons cause a lasting effect until you press another lift button.
+		if (liftCommand == MANUAL_FORWARD || liftCommand == MANUAL_BACK) {
+			liftCommand = AUTO_GRAVITY;
+		}
+
 		if (techStick.GetRawButton(5)) { // LB
-			liftTarget = MANUAL_FORWARD;
+			liftCommand = MANUAL_FORWARD;
 		} else if (techStick.GetRawButton(6)) { // RB
-			liftTarget = MANUAL_BACK;
+			liftCommand = MANUAL_BACK;
 		} else if (techStick.GetRawButton(2)) { // B
-			liftTarget = AUTO_FORWARD;
+			liftCommand = AUTO_FORWARD;
 		} else if (techStick.GetRawButton(4)) { // Y
-			liftTarget = AUTO_VERTICAL;
+			liftCommand = AUTO_VERTICAL;
 		} else if (techStick.GetRawButton(3)) { // X
-			liftTarget = AUTO_BACK;
+			liftCommand = AUTO_BACK;
+		} else if (techStick.GetRawButton(10)) { // push down right stick
+			liftCommand = DISABLED;
 		}
 		LiftControl();
-		// The manual lift buttons have no lasting effect.  The lift arm is disabled
-		// once you release a manual lift button.  In contrast, the auto lift buttons
-		// cause a lasting effect until you press another lift button.
-		if (liftTarget == MANUAL_FORWARD || liftTarget == MANUAL_BACK) {
-			liftTarget = DISABLED;
-		}
 
 		// Control the shooter
 		if (techStick.GetRawAxis(2)) {
@@ -235,22 +239,14 @@ private:
 	void LiftControl()
 	{
 		double liftPower;
-		if (liftTarget == DISABLED) {
+		if (liftCommand == DISABLED) {
 			liftPower = 0;
-		} else if (liftTarget == MANUAL_FORWARD) {
+		} else if (liftCommand == MANUAL_FORWARD) {
 			liftPower = .5;
-		} else if (liftTarget == MANUAL_BACK) {
+		} else if (liftCommand == MANUAL_BACK) {
 			liftPower = -.5;
 		} else {
-			// automatic control to specified position
-			double liftSetPoint;
-			if (liftTarget == AUTO_FORWARD) {
-				liftSetPoint = liftPotForward;
-			} else if (liftTarget == AUTO_VERTICAL) {
-				liftSetPoint = liftPotVertical;
-			} else if (liftTarget == AUTO_BACK) {
-				liftSetPoint = liftPotBack;
-			}
+			// automatic control
 
 			// compute average of several liftPot samples
 			double liftPotTotal;
@@ -264,10 +260,23 @@ private:
 			liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
 			double liftGravity = -0.3 * cos(liftAngle * 3.1416 / 180.0);
 
-			// compute P term for lift arm
-			double liftError = liftPotAverage - liftSetPoint;
-			double liftProportional = -.2 * liftError;
-			liftPower = liftGravity + liftProportional;
+			if (liftCommand == AUTO_GRAVITY) {
+				liftPower = liftGravity;
+			} else {
+				// move to target position (and also compensate for gravity)
+				double liftSetPoint;
+				if (liftCommand == AUTO_FORWARD) {
+					liftSetPoint = liftPotForward;
+				} else if (liftCommand == AUTO_VERTICAL) {
+					liftSetPoint = liftPotVertical;
+				} else if (liftCommand == AUTO_BACK) {
+					liftSetPoint = liftPotBack;
+				}
+				// compute P term
+				double liftError = liftPotAverage - liftSetPoint;
+				double liftProportional = -.2 * liftError;
+				liftPower = liftGravity + liftProportional;
+			}
 		}
 		lift.Set(liftPower, 0);
 	}
