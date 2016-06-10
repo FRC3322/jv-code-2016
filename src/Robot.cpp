@@ -14,7 +14,7 @@ const double liftVertical = 2.62;
 class Robot: public IterativeRobot
 {
 	AnalogInput liftPot;
-	PIDController liftController;
+	double liftSetPoint;
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
@@ -35,7 +35,6 @@ class Robot: public IterativeRobot
 public:
 	Robot() :
 		liftPot(0),
-		liftController(0.05, 0.005, 0.05, &liftPot, &lift),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -152,45 +151,39 @@ private:
 		timer = 0;
 		shooterDefaultOn=true;
 		lift.Disable();
-		liftController.Disable();
 		shooter.Disable();
+		liftSetPoint = liftVertical;
 	}
 
 	void TeleopPeriodic()
 	{
-		double liftAngle;
+		// set lift arm target position
+		double liftSetPoint;
+		if (techStick.GetRawButton(2)) { // B
+			liftSetPoint = liftForward;
+		} else if (techStick.GetRawButton(4)) { // Y
+			liftSetPoint = liftVertical;
+		} else if (techStick.GetRawButton(3)) { // X
+			liftSetPoint = liftBack;
+		}
 
 		// compute average of several liftPot samples
 		double liftPotTotal;
 		int liftPotCount;
-		for (liftPotCount = 0; liftPotCount < 50; liftPotCount++) {
+		for (liftPotCount = 0; liftPotCount < 20; liftPotCount++) {
 			liftPotTotal += liftPot.GetVoltage();
 		}
 		double liftPotAverage = liftPotTotal / liftPotCount;
-		liftAngle = (liftPotAverage-liftForward)*3.1415/2.0/(liftVertical-liftForward);
-		// liftAngle = 45;
-		lift.Set(-0.3 * cos(liftAngle));
 
-/*
-		// Control the arm automatically
-		if (techStick.GetRawButton(2)) { // B
-			liftController.Disable();
-			liftController.Enable();
-			liftController.SetSetpoint(liftForward);
-		}
-		if (techStick.GetRawButton(4)) { // Y
-			liftController.Disable();
-			liftController.Enable();
-			liftController.SetSetpoint(liftVertical);
-		}
-		if (techStick.GetRawButton(3)) { // X
-			liftController.Disable();
-			liftController.Enable();
-			liftController.SetSetpoint(liftBack);
-		}
-		if (techStick.GetRawButton(10)) { // push down right stick
-			liftController.Disable();
-		}
+		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
+		double liftAngle = (liftPotAverage-liftForward)*90.0/(liftVertical-liftForward);
+		double liftGravity = -0.3 * cos(liftAngle * 3.1416 / 180.0);
+
+		// compute P term for lift arm
+		double liftError = liftPotAverage - liftSetPoint;
+		double liftProportional = liftError * -.2;
+
+		lift.Set(liftGravity + liftProportional);
 
 		// Control the shooter
 		if (techStick.GetRawAxis(2)) {
@@ -208,18 +201,6 @@ private:
 			shooterDefaultOn = !shooterDefaultOn;
 		}
 		lastShooterToggleButton = techStick.GetRawButton(8);
-*/
-/*
-		// Control the arm manually
-		if (techStick.GetRawButton(5)) { // LB
-			liftController.Disable();
-			lift.Set(0.5,0); // down
-		}
-		if (techStick.GetRawButton(6)) { // RB
-			liftController.Disable();
-			lift.Set(-0.5,0); // up
-		}
-*/
 
 		// Control the drive speed
 		if (!driveToggleButton && driveStick.GetRawButton(1)) { // A
@@ -260,10 +241,6 @@ private:
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage (average)", liftPotAverage);
 		SmartDashboard::PutNumber("Lift Angle", liftAngle);
-		SmartDashboard::PutNumber("Lift Power", -0.3 * cos(liftAngle));
-		SmartDashboard::PutNumber("Cos(Pi)", cos(3.1415));
-
-
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 		SmartDashboard::PutNumber("Speed", driveStick.GetRawAxis(1));
 		SmartDashboard::PutNumber("Turn", driveStick.GetRawAxis(4));
