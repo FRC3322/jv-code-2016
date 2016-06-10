@@ -1,20 +1,22 @@
 #include "WPILib.h"
 #include "AHRS.h"
 
-const double liftSetPointUp = 4.0;
-const double liftSetPointDown = 1.0;
 const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
-const double liftForward = 4.31;
-const double liftBack = 1.55;
-const double liftVertical = 2.62;
+const double liftPotForward = 4.31;
+const double liftPotBack = 1.55;
+const double liftPotVertical = 2.62;
+
+enum LiftTargetEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_VERTICAL, AUTO_BACK, DISABLED};
 
 class Robot: public IterativeRobot
 {
+	LiftTargetEnum liftTarget;
 	AnalogInput liftPot;
-	double liftSetPoint;
+	double liftPotAverage;
+	double liftAngle;
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
@@ -34,7 +36,10 @@ class Robot: public IterativeRobot
 
 public:
 	Robot() :
+		liftTarget(AUTO_VERTICAL),
 		liftPot(0),
+		liftPotAverage(0),
+		liftAngle(0),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -93,19 +98,17 @@ private:
 		ahrs->Reset();
 		driveEncoder.Reset();
 		shooter.Disable();
-		lift.Disable();
+		liftTarget = AUTO_VERTICAL;
 	}
 	void AutonomousPeriodic()
 	{
-		SmartDash(0, 0);
+		SmartDash();
 		timer++;
+		LiftControl();
 
-		// lower lift
+		// wait for lift arm to reach forward position
 		if (autonState == 0) {
-			lift.Set(-0.5, 0);
-
 			if (timer > 5 * ticksPerSecond) {
-				lift.Set(0, 0);
 				autonState++;
 			}
 		}
@@ -152,38 +155,32 @@ private:
 		shooterDefaultOn=true;
 		lift.Disable();
 		shooter.Disable();
-		liftSetPoint = liftVertical;
+		liftTarget = AUTO_VERTICAL;
 	}
 
 	void TeleopPeriodic()
 	{
-		// set lift arm target position
-		double liftSetPoint;
-		if (techStick.GetRawButton(2)) { // B
-			liftSetPoint = liftForward;
+		SmartDash();
+
+		// Control the lift arm
+		if (techStick.GetRawButton(5)) { // LB
+			liftTarget = MANUAL_FORWARD;
+		} else if (techStick.GetRawButton(6)) { // RB
+			liftTarget = MANUAL_BACK;
+		} else if (techStick.GetRawButton(2)) { // B
+			liftTarget = AUTO_FORWARD;
 		} else if (techStick.GetRawButton(4)) { // Y
-			liftSetPoint = liftVertical;
+			liftTarget = AUTO_VERTICAL;
 		} else if (techStick.GetRawButton(3)) { // X
-			liftSetPoint = liftBack;
+			liftTarget = AUTO_BACK;
 		}
-
-		// compute average of several liftPot samples
-		double liftPotTotal;
-		int liftPotCount;
-		for (liftPotCount = 0; liftPotCount < 20; liftPotCount++) {
-			liftPotTotal += liftPot.GetVoltage();
+		LiftControl();
+		// The manual lift buttons have no lasting effect.  The lift arm is disabled
+		// once you release a manual lift button.  In contrast, the auto lift buttons
+		// cause a lasting effect until you press another lift button.
+		if (liftTarget == MANUAL_FORWARD || liftTarget == MANUAL_BACK) {
+			liftTarget = DISABLED;
 		}
-		double liftPotAverage = liftPotTotal / liftPotCount;
-
-		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
-		double liftAngle = (liftPotAverage-liftForward)*90.0/(liftVertical-liftForward);
-		double liftGravity = -0.3 * cos(liftAngle * 3.1416 / 180.0);
-
-		// compute P term for lift arm
-		double liftError = liftPotAverage - liftSetPoint;
-		double liftProportional = liftError * -.2;
-
-		lift.Set(liftGravity + liftProportional);
 
 		// Control the shooter
 		if (techStick.GetRawAxis(2)) {
@@ -221,7 +218,6 @@ private:
 		//myRobot.TankDrive(driveStick.GetRawAxis(1),driveStick.GetRawAxis(5));
 		//myRobot.ArcadeDrive(driveStick); // drive with arcade style (use right stick)
 
-		SmartDash(liftPotAverage, liftAngle);
 	}
 	void TestPeriodic()
 	{
@@ -234,7 +230,49 @@ private:
 		angleError = angleError*.02;
 		myRobot.Drive(outputMagnitude, -angleError);
 	}
-	void SmartDash(double liftPotAverage, double liftAngle)
+
+	// control the lift arm motor
+	void LiftControl()
+	{
+		double liftPower;
+		if (liftTarget == DISABLED) {
+			liftPower = 0;
+		} else if (liftTarget == MANUAL_FORWARD) {
+			liftPower = .5;
+		} else if (liftTarget == MANUAL_BACK) {
+			liftPower = -.5;
+		} else {
+			// automatic control to specified position
+			double liftSetPoint;
+			if (liftTarget == AUTO_FORWARD) {
+				liftSetPoint = liftPotForward;
+			} else if (liftTarget == AUTO_VERTICAL) {
+				liftSetPoint = liftPotVertical;
+			} else if (liftTarget == AUTO_BACK) {
+				liftSetPoint = liftPotBack;
+			}
+
+			// compute average of several liftPot samples
+			double liftPotTotal;
+			int liftPotCount;
+			for (liftPotCount = 0; liftPotCount < 20; liftPotCount++) {
+				liftPotTotal += liftPot.GetVoltage();
+			}
+			liftPotAverage = liftPotTotal / liftPotCount;
+
+			// compute power needed to compensate for gravity (negative power moves from forward->vertical)
+			liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
+			double liftGravity = -0.3 * cos(liftAngle * 3.1416 / 180.0);
+
+			// compute P term for lift arm
+			double liftError = liftPotAverage - liftSetPoint;
+			double liftProportional = -.2 * liftError;
+			liftPower = liftGravity + liftProportional;
+		}
+		lift.Set(liftPower, 0);
+	}
+
+	void SmartDash()
 	{
 		SmartDashboard::PutNumber("IMU Yaw", GetAngle());
 		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
