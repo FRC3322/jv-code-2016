@@ -36,7 +36,7 @@ class Robot: public IterativeRobot
 
 public:
 	Robot() :
-		liftCommand(AUTO_VERTICAL),
+		liftCommand(AUTO_GRAVITY),
 		liftPot(0),
 		liftPotAverage(0),
 		liftAngle(0),
