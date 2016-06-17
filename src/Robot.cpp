@@ -5,9 +5,9 @@ const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
-const double liftPotForward = 4.31;
+const double liftPotForward = 4.45;
+const double liftPotVertical = 2.7;
 const double liftPotBack = 1.55;
-const double liftPotVertical = 2.62;
 
 enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
 
@@ -17,6 +17,8 @@ class Robot: public IterativeRobot
 	AnalogInput liftPot;
 	double liftPotAverage;
 	double liftAngle;
+	double liftErrorSum;
+	double liftErrorLast;
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
@@ -40,6 +42,8 @@ public:
 		liftPot(0),
 		liftPotAverage(0),
 		liftAngle(0),
+		liftErrorSum(0),
+		liftErrorLast(0),
 		ultrasonic(1),
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
@@ -152,10 +156,12 @@ private:
 	void TeleopInit()
 	{
 		timer = 0;
-		shooterDefaultOn=true;
+		shooterDefaultOn=false;
 		lift.Disable();
 		shooter.Disable();
-		liftCommand = AUTO_VERTICAL;
+		liftCommand = DISABLED;
+		liftErrorSum = 0;
+		liftErrorLast = 0;
 	}
 
 	void TeleopPeriodic()
@@ -198,7 +204,7 @@ private:
 		}
 
 		// Control the default state of the shooter
-		if (!lastShooterToggleButton && techStick.GetRawButton(8)) {
+		if (!lastShooterToggleButton && techStick.GetRawButton(8)) { // START button
 			shooterDefaultOn = !shooterDefaultOn;
 		}
 		lastShooterToggleButton = techStick.GetRawButton(8);
@@ -239,26 +245,27 @@ private:
 	void LiftControl()
 	{
 		double liftPower;
+		// compute average of several liftPot samples
+		double liftPotTotal;
+		int liftPotCount;
+		for (liftPotCount = 0; liftPotCount < 1; liftPotCount++) {
+			liftPotTotal += liftPot.GetVoltage();
+		}
+		liftPotAverage = liftPotTotal / liftPotCount;
+
+		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
+		liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
+		double liftGravity = 0.35 * cos(liftAngle * 3.1416 / 180.0);
+
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
-			liftPower = .5;
+			liftPower = liftGravity - .15;
 		} else if (liftCommand == MANUAL_BACK) {
-			liftPower = -.5;
+			liftPower = liftGravity + .15;
 		} else {
 			// automatic control
 
-			// compute average of several liftPot samples
-			double liftPotTotal;
-			int liftPotCount;
-			for (liftPotCount = 0; liftPotCount < 20; liftPotCount++) {
-				liftPotTotal += liftPot.GetVoltage();
-			}
-			liftPotAverage = liftPotTotal / liftPotCount;
-
-			// compute power needed to compensate for gravity (negative power moves from forward->vertical)
-			liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
-			double liftGravity = -0.3 * cos(liftAngle * 3.1416 / 180.0);
 
 			if (liftCommand == AUTO_GRAVITY) {
 				liftPower = liftGravity;
@@ -272,13 +279,24 @@ private:
 				} else if (liftCommand == AUTO_BACK) {
 					liftSetPoint = liftPotBack;
 				}
-				// compute P term
 				double liftError = liftPotAverage - liftSetPoint;
-				double liftProportional = -.2 * liftError;
-				liftPower = liftGravity + liftProportional;
+
+				// compute P term
+				double liftProportional = .08 * liftError;
+
+				// compute I term
+				liftErrorSum = .99 * liftErrorSum + liftError;
+				double liftIntegral = 0;
+				liftIntegral = .0015 * liftErrorSum;
+
+				// compute D term
+				double liftDerivative = .2 * (liftError - liftErrorLast);
+				liftErrorLast = liftError;
+
+				liftPower = liftGravity + liftProportional + liftIntegral + liftDerivative;
 			}
 		}
-		lift.Set(liftPower, 0);
+		lift.Set(liftPower, 0); //Tells lift to move. Made Liftpower negative to compensate for motor being put on oposite side (sat 6.11.16)
 	}
 
 	void SmartDash()
