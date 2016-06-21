@@ -5,11 +5,13 @@ const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
-const double liftPotForward = 4.45;
-const double liftPotVertical = 2.7;
-const double liftPotBack = 1.55;
+const double liftPotForward = 4.55;
+const double liftPotVertical = 2.8;
+const double liftPotBack = 1.67;
+const double liftPot30 = (liftPotVertical - liftPotForward) / 3.0 + liftPotVertical;
 
-enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
+
+enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_30, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
 
 class Robot: public IterativeRobot
 {
@@ -19,11 +21,13 @@ class Robot: public IterativeRobot
 	double liftAngle;
 	double liftErrorSum;
 	double liftErrorLast;
+	double liftPower;
 	AnalogInput ultrasonic;
 	Encoder driveEncoder;
 	std::shared_ptr<NetworkTable> table;
 	Talon shooter;
-	Talon lift;
+	Talon lift1;
+	Talon lift2;
 	RobotDrive myRobot;
 	Joystick driveStick;
 	Joystick techStick;
@@ -48,7 +52,8 @@ public:
 		driveEncoder(0, 1, false, Encoder::k4X),
         table(NULL),
 		shooter(5),
-		lift(4),
+		lift1(4),
+		lift2(6),
 		myRobot(2,3,0,1),
 		driveStick(1),
 		techStick(0),
@@ -81,7 +86,7 @@ private:
 		try {
 			/* Communicate w/navX MXP via the MXP SPI Bus.                                       */
 			/* Alternatively:  I2C::Port::kMXP, SerialPort::Port::kMXP or SerialPort::Port::kUSB */
-			/* See http://navx-mxp.kauailabs.com/guidance/selecting-an-interface/ for details.   */
+			/* See http:b//navx-mxp.kauailabs.com/guidance/selecting-an-interface/ for details.   */
 			ahrs = new AHRS(SPI::Port::kMXP);
 		} catch (std::exception ex) {
 			std::string err_string = "Error instantiating navX MXP:  ";
@@ -157,7 +162,8 @@ private:
 	{
 		timer = 0;
 		shooterDefaultOn=false;
-		lift.Disable();
+		lift1.Disable();
+		lift2.Disable();
 		shooter.Disable();
 		liftCommand = DISABLED;
 		liftErrorSum = 0;
@@ -177,14 +183,14 @@ private:
 			liftCommand = AUTO_GRAVITY;
 		}
 
-		if (techStick.GetRawButton(5)) { // LB
+		if (techStick.GetRawButton(6)) { // RB
 			liftCommand = MANUAL_FORWARD;
-		} else if (techStick.GetRawButton(6)) { // RB
+		} else if (techStick.GetRawButton(5)) { // LB
 			liftCommand = MANUAL_BACK;
 		} else if (techStick.GetRawButton(2)) { // B
 			liftCommand = AUTO_FORWARD;
 		} else if (techStick.GetRawButton(4)) { // Y
-			liftCommand = AUTO_VERTICAL;
+			liftCommand = AUTO_30;
 		} else if (techStick.GetRawButton(3)) { // X
 			liftCommand = AUTO_BACK;
 		} else if (techStick.GetRawButton(10)) { // push down right stick
@@ -244,7 +250,6 @@ private:
 	// control the lift arm motor
 	void LiftControl()
 	{
-		double liftPower;
 		// compute average of several liftPot samples
 		double liftPotTotal;
 		int liftPotCount;
@@ -255,17 +260,17 @@ private:
 
 		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
 		liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
-		double liftGravity = 0.35 * cos(liftAngle * 3.1416 / 180.0);
+		double liftGravity = 0.8 * cos(liftAngle * 3.1416 / 180.0);
+		liftGravity = 0;
 
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
-			liftPower = liftGravity - .15;
+			liftPower = liftGravity - .5;
 		} else if (liftCommand == MANUAL_BACK) {
-			liftPower = liftGravity + .15;
+			liftPower = liftGravity + .5;
 		} else {
 			// automatic control
-
 
 			if (liftCommand == AUTO_GRAVITY) {
 				liftPower = liftGravity;
@@ -274,6 +279,8 @@ private:
 				double liftSetPoint;
 				if (liftCommand == AUTO_FORWARD) {
 					liftSetPoint = liftPotForward;
+				} else if (liftCommand == AUTO_30) {
+					liftSetPoint = liftPot30;
 				} else if (liftCommand == AUTO_VERTICAL) {
 					liftSetPoint = liftPotVertical;
 				} else if (liftCommand == AUTO_BACK) {
@@ -285,18 +292,22 @@ private:
 				double liftProportional = .08 * liftError;
 
 				// compute I term
-				liftErrorSum = .99 * liftErrorSum + liftError;
-				double liftIntegral = 0;
-				liftIntegral = .0015 * liftErrorSum;
+				liftErrorSum = liftErrorSum + liftError;
+				double liftIntegral =  .0015 * liftErrorSum;
+
+				liftIntegral = 0;
 
 				// compute D term
 				double liftDerivative = .2 * (liftError - liftErrorLast);
 				liftErrorLast = liftError;
 
+				liftDerivative = 0;
+
 				liftPower = liftGravity + liftProportional + liftIntegral + liftDerivative;
-			}
+			 }
 		}
-		lift.Set(liftPower, 0); //Tells lift to move. Made Liftpower negative to compensate for motor being put on oposite side (sat 6.11.16)
+		lift1.Set(liftPower, 0);
+		lift2.Set(-liftPower, 0);
 	}
 
 	void SmartDash()
@@ -306,6 +317,7 @@ private:
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage (average)", liftPotAverage);
 		SmartDashboard::PutNumber("Lift Angle", liftAngle);
+		SmartDashboard::PutNumber("Lift Power", liftPower);
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
 		SmartDashboard::PutNumber("Speed", driveStick.GetRawAxis(1));
 		SmartDashboard::PutNumber("Turn", driveStick.GetRawAxis(4));
