@@ -6,8 +6,8 @@ const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
 const double liftPotForward = 4.55;
-const double liftPotVertical = 2.8;
-const double liftPotBack = 1.67;
+const double liftPotVertical = 2.86;
+const double liftPotBack = 1.744;
 const double liftPot30 = (liftPotVertical - liftPotForward) / 3.0 + liftPotVertical;
 
 
@@ -165,7 +165,7 @@ private:
 		lift1.Disable();
 		lift2.Disable();
 		shooter.Disable();
-		liftCommand = DISABLED;
+		liftCommand = AUTO_GRAVITY;
 		liftErrorSum = 0;
 		liftErrorLast = 0;
 	}
@@ -261,14 +261,15 @@ private:
 		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
 		liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
 		double liftGravity = 0.8 * cos(liftAngle * 3.1416 / 180.0);
-		liftGravity = 0;
+
+		// liftGravity = 0;
 
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
-			liftPower = liftGravity - .5;
+			liftPower = liftGravity - .2;
 		} else if (liftCommand == MANUAL_BACK) {
-			liftPower = liftGravity + .5;
+			liftPower = liftGravity + .2;
 		} else {
 			// automatic control
 
