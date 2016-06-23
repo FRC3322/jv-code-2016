@@ -7,7 +7,7 @@ const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
 const double liftPotForward = 4.55;
 const double liftPotVertical = 2.86;
-const double liftPotBack = 1.744;
+const double liftPotBack = 1.8;
 const double liftPot30 = (liftPotVertical - liftPotForward) / 3.0 + liftPotVertical;
 
 
@@ -291,6 +291,7 @@ private:
 
 				// compute P term
 				double liftProportional = .08 * liftError;
+				liftProportional = 0;
 
 				// compute I term
 				liftErrorSum = liftErrorSum + liftError;
@@ -307,8 +308,8 @@ private:
 				liftPower = liftGravity + liftProportional + liftIntegral + liftDerivative;
 			 }
 		}
-		lift1.Set(liftPower, 0);
-		lift2.Set(-liftPower, 0);
+		lift1.Set(-liftPower, 0);
+		lift2.Set(liftPower, 0);
 	}
 
 	void SmartDash()
