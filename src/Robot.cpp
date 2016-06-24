@@ -5,13 +5,13 @@ const double ticksPerSecond = 44.0;
 const double forwardDrive = 4.0;
 const double afterTurnForwardDrive = 2.0;
 const double turnAngle = 90.0;
-const double liftPotForward = 4.55;
-const double liftPotVertical = 2.86;
-const double liftPotBack = 1.8;
-const double liftPot30 = (liftPotVertical - liftPotForward) / 3.0 + liftPotVertical;
+const double liftPotForward = 4.66;
+const double liftPotVertical = 2.85;
+const double liftPotBack = 1.83;
+const double liftPot45 = (liftPotVertical - liftPotForward) / 2.0 + liftPotForward;
 
 
-enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_30, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
+enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_45, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
 
 class Robot: public IterativeRobot
 {
@@ -161,7 +161,7 @@ private:
 	void TeleopInit()
 	{
 		timer = 0;
-		shooterDefaultOn=false;
+		shooterDefaultOn=true;
 		lift1.Disable();
 		lift2.Disable();
 		shooter.Disable();
@@ -190,7 +190,7 @@ private:
 		} else if (techStick.GetRawButton(2)) { // B
 			liftCommand = AUTO_FORWARD;
 		} else if (techStick.GetRawButton(4)) { // Y
-			liftCommand = AUTO_30;
+			liftCommand = AUTO_45;
 		} else if (techStick.GetRawButton(3)) { // X
 			liftCommand = AUTO_BACK;
 		} else if (techStick.GetRawButton(10)) { // push down right stick
@@ -204,7 +204,7 @@ private:
 		} else if (techStick.GetRawAxis(3)) {
 			shooter.Set(-1, 0);
 		} else if (shooterDefaultOn) {
-			shooter.Set(0.1, 0);
+			shooter.Set(0.2, 0);
 		} else {
 			shooter.Disable();
 		}
@@ -253,23 +253,25 @@ private:
 		// compute average of several liftPot samples
 		double liftPotTotal;
 		int liftPotCount;
-		for (liftPotCount = 0; liftPotCount < 1; liftPotCount++) {
+		for (liftPotCount = 0; liftPotCount < 5; liftPotCount++) {
 			liftPotTotal += liftPot.GetVoltage();
 		}
 		liftPotAverage = liftPotTotal / liftPotCount;
 
 		// compute power needed to compensate for gravity (negative power moves from forward->vertical)
 		liftAngle = (liftPotAverage-liftPotForward)*90.0/(liftPotVertical-liftPotForward);
-		double liftGravity = 0.8 * cos(liftAngle * 3.1416 / 180.0);
+		double liftGravity = 0.5 * cos(liftAngle * 3.1416 / 180.0);
 
 		// liftGravity = 0;
 
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
-			liftPower = liftGravity - .2;
+			liftPower = liftGravity - .5;
+			// liftPower = -1.0;
 		} else if (liftCommand == MANUAL_BACK) {
-			liftPower = liftGravity + .2;
+			liftPower = liftGravity + .5;
+			// liftPower = 1.0;
 		} else {
 			// automatic control
 
@@ -280,8 +282,8 @@ private:
 				double liftSetPoint;
 				if (liftCommand == AUTO_FORWARD) {
 					liftSetPoint = liftPotForward;
-				} else if (liftCommand == AUTO_30) {
-					liftSetPoint = liftPot30;
+				} else if (liftCommand == AUTO_45) {
+					liftSetPoint = liftPot45;
 				} else if (liftCommand == AUTO_VERTICAL) {
 					liftSetPoint = liftPotVertical;
 				} else if (liftCommand == AUTO_BACK) {
@@ -290,26 +292,35 @@ private:
 				double liftError = liftPotAverage - liftSetPoint;
 
 				// compute P term
-				double liftProportional = .08 * liftError;
-				liftProportional = 0;
+				double liftProportional = .3 * liftError;
+				// liftProportional = 0;
 
 				// compute I term
-				liftErrorSum = liftErrorSum + liftError;
-				double liftIntegral =  .0015 * liftErrorSum;
+				liftErrorSum = .97 * liftErrorSum + liftError;
+				double liftIntegral =  .002 * liftErrorSum;
 
-				liftIntegral = 0;
+				// liftIntegral = 0;
 
 				// compute D term
-				double liftDerivative = .2 * (liftError - liftErrorLast);
+				double liftDerivative = 3.0 * (liftError - liftErrorLast);
 				liftErrorLast = liftError;
 
-				liftDerivative = 0;
+				// liftDerivative = 0;
 
 				liftPower = liftGravity + liftProportional + liftIntegral + liftDerivative;
+
+				if ((liftCommand == AUTO_FORWARD || liftCommand == AUTO_BACK) && abs(liftError) < .5) {
+					liftCommand = DISABLED;
+				}
 			 }
 		}
-		lift1.Set(-liftPower, 0);
-		lift2.Set(liftPower, 0);
+		if (liftCommand == DISABLED) {
+			lift1.Disable();
+			lift2.Disable();
+		} else {
+			lift1.Set(-liftPower, 0);
+			lift2.Set(liftPower, 0);
+		}
 	}
 
 	void SmartDash()
@@ -318,6 +329,10 @@ private:
 		SmartDashboard::PutNumber("Encoder Distance", driveEncoder.GetDistance());
 		SmartDashboard::PutNumber("Encoder Rate", driveEncoder.GetRate());
 		SmartDashboard::PutNumber("Lift Potentiometer Voltage (average)", liftPotAverage);
+		SmartDashboard::PutNumber("liftPotForward", liftPotForward);
+		SmartDashboard::PutNumber("liftPot45", liftPot45);
+		SmartDashboard::PutNumber("liftPotVertical", liftPotVertical);
+		SmartDashboard::PutNumber("liftPotBack", liftPotBack);
 		SmartDashboard::PutNumber("Lift Angle", liftAngle);
 		SmartDashboard::PutNumber("Lift Power", liftPower);
 		SmartDashboard::PutNumber("Ultrasonic", ultrasonic.GetValue());
