@@ -2,14 +2,21 @@
 #include "AHRS.h"
 
 const double ticksPerSecond = 44.0;
-const double forwardDrive = 4.0;
-const double afterTurnForwardDrive = 2.0;
-const double turnAngle = 90.0;
+const double forwardDriveRough = .35;
+const double forwardDriveLow = .45;
+const double afterTurnForwardDriveRough = 0.2;
+const double afterTurnForwardDriveLow = 0.4;
+double turnAngle = 105.0;
 const double liftPotForward = 4.66;
 const double liftPotVertical = 2.85;
 const double liftPotBack = 1.83;
 const double liftPot45 = (liftPotVertical - liftPotForward) / 2.0 + liftPotForward;
 
+// 0 == rough terrain
+// 1 == low bar
+const int autonDefense = 0;
+
+const bool autonStraightOnly = false;
 
 enum LiftCommandEnum {MANUAL_FORWARD, MANUAL_BACK, AUTO_FORWARD, AUTO_45, AUTO_VERTICAL, AUTO_BACK, AUTO_GRAVITY, DISABLED};
 
@@ -106,58 +113,159 @@ private:
 		timer = 0;
 		ahrs->Reset();
 		driveEncoder.Reset();
-		shooter.Disable();
-		liftCommand = AUTO_FORWARD;
+		shooter.Set(0.25, 0);
+
+		if (autonDefense == 0) {			// rough terrain
+			// Rough
+			liftCommand = AUTO_VERTICAL;
+		} else if (autonDefense == 1) {	// low bar
+			turnAngle = -turnAngle;
+			liftCommand = AUTO_45;
+		} else {					// go straight
+			liftCommand = AUTO_45;
+		}
+
 	}
 	void AutonomousPeriodic()
+
 	{
 		SmartDash();
 		timer++;
 		LiftControl();
 
-		// wait for lift arm to reach forward position
-		if (autonState == 0) {
-			if (timer > 5 * ticksPerSecond) {
-				autonState++;
+		if (autonDefense == 0) {		// Rough Terrain
+			// wait for lift arm to reach position
+			if (autonState == 0) {
+				if (timer > 0 * ticksPerSecond) {
+					autonState++;
+					timer = 0;
+				}
 			}
-		}
 
-		// drive forward
-		if (autonState == 1) {
-			DriveGyro(-.5, 0);
-
-			if (driveEncoder.GetDistance() > forwardDrive) {
-				DriveGyro(0, 0);
-				autonState++;
+			// drive backward to wall
+			if (autonState == 1) {
+				DriveGyro(-0.6, 0);
+				if (timer > 6 * ticksPerSecond) {
+					autonState++;
+				}
 			}
-		}
-
-		// turn right/left 90 degrees
-		if (autonState == 2) {
-			myRobot.SetLeftRightMotorOutputs(-0.5, 0.5); //Adjust on spot
-
-			if (abs(GetAngle()) > abs(turnAngle)) {
-				DriveGyro(0, turnAngle);
-				driveEncoder.Reset();
-				autonState++;
+			// Slow down before hit
+			if (autonState == 2) {
+				DriveGyro(-0.3, 0);
+				if (timer > 7 * ticksPerSecond  && !autonStraightOnly) {
+					driveEncoder.Reset();
+					autonState++;
+				}
 			}
-		}
 
-		// drive forward after turning
-		if (autonState == 3) {
-			DriveGyro (-0.5, turnAngle);
+			// drive forward off wall
+			if (autonState == 3) {
+				DriveGyro(0.5, 0);
+				if (abs(driveEncoder.GetDistance()) > forwardDriveRough) {
+					autonState++;
+				}
+			}
 
-	        if (driveEncoder.GetDistance() > afterTurnForwardDrive) {
-	        	DriveGyro (0,turnAngle);
-	            autonState++;
-	        }
-		}
 
-		// shoot
-		if (autonState == 4) {
-			shooter.Set (1,0);
+			// turn clockwise 110 degrees
+			// clockwise is (+,-)
+			if (autonState == 4) {
+				myRobot.SetLeftRightMotorOutputs(.8, -.8);
+				if (abs(GetAngle()) > abs(turnAngle)) {
+					driveEncoder.Reset();
+					autonState++;
+				}
+			}
+
+			// drive forward after turning
+			if (autonState == 5) {
+				DriveGyro (0.5, turnAngle);
+				liftCommand = AUTO_45;
+				if (abs(driveEncoder.GetDistance()) > afterTurnForwardDriveRough) {
+					timer = 0;
+					autonState++;
+				}
+			}
+
+			// lower arm
+			if (autonState == 6) {
+				liftCommand = AUTO_FORWARD;
+				DriveGyro (0, turnAngle);
+				if (timer > 1 * ticksPerSecond) {
+					autonState++;
+				}
+			}
+
+			// drive forward and shoot
+			if (autonState == 7) {
+				DriveGyro (0.5, turnAngle);
+				shooter.Set (1,0);
+			}
+
+		} else if (autonDefense == 1) {		// low bar
+
+			// wait for lift arm to reach position
+			if (autonState == 0) {
+				if (timer > 1 * ticksPerSecond) {
+					autonState++;
+					timer = 0;
+				}
+			}
+
+			// drive backward to wall
+			if (autonState == 1) {
+				DriveGyro(-0.6, 0);
+				if (timer > 7 * ticksPerSecond && !autonStraightOnly) {
+					driveEncoder.Reset();
+					autonState++;
+				}
+			}
+
+			// drive forward off wall
+			if (autonState == 2) {
+				DriveGyro(0.5, 0);
+				if (abs(driveEncoder.GetDistance()) > forwardDriveLow) {
+					autonState++;
+				}
+			}
+
+
+			// turn counter clockwise 110 degrees
+			// clockwise is (+,-)
+			if (autonState == 3) {
+				myRobot.SetLeftRightMotorOutputs(-.8, .8);
+				if (abs(GetAngle()) > abs(turnAngle)) {
+					driveEncoder.Reset();
+					autonState++;
+				}
+			}
+
+			// drive forward after turning
+			if (autonState == 4) {
+				DriveGyro (0.4, turnAngle);
+				if (abs(driveEncoder.GetDistance()) > afterTurnForwardDriveLow) {
+					timer = 0;
+					autonState++;
+				}
+			}
+
+			// lower arm
+			if (autonState == 5) {
+				liftCommand = AUTO_FORWARD;
+				DriveGyro (0, turnAngle);
+				if (timer > 1 * ticksPerSecond) {
+					autonState++;
+				}
+			}
+
+			// drive forward and shoot
+			if (autonState == 6) {
+				DriveGyro (0.4, turnAngle);
+				shooter.Set (1,0);
+			}
 		}
 	}
+
 	void TeleopInit()
 	{
 		timer = 0;
@@ -168,6 +276,8 @@ private:
 		liftCommand = AUTO_GRAVITY;
 		liftErrorSum = 0;
 		liftErrorLast = 0;
+		ahrs->Reset();
+
 	}
 
 	void TeleopPeriodic()
@@ -223,8 +333,8 @@ private:
 		driveToggleButton = driveStick.GetRawButton(1);
 
 		// Compute power for the drive motors (do this manually so we can adjust for different strength motors)
-		double basePower = (driveFast ? 0.75 : 0.3) * (-driveStick.GetRawAxis(1));
-		double turn = (driveFast ? 0.75 : 0.75) * driveStick.GetRawAxis(4);
+		double basePower = (driveFast ? 1 : 0.75) * (-driveStick.GetRawAxis(1));
+		double turn = (driveFast ? 0.9 : 0.9) * driveStick.GetRawAxis(4);
 		double leftPower = (basePower + turn); // left motor is stronger?
 		leftPower *= (basePower > 0) ? 0.9 : 1.03;
 		double rightPower = basePower - turn;
@@ -243,8 +353,8 @@ private:
 	void DriveGyro(double outputMagnitude, double angle)
 	{
 		float angleError = GetAngle() - angle;
-		angleError = angleError*.02;
-		myRobot.Drive(outputMagnitude, -angleError);
+		angleError = angleError*.05;
+		myRobot.Drive(outputMagnitude, angleError);
 	}
 
 	// control the lift arm motor
@@ -267,6 +377,8 @@ private:
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
+
+
 			liftPower = liftGravity - .5;
 			// liftPower = -1.0;
 		} else if (liftCommand == MANUAL_BACK) {
@@ -339,6 +451,8 @@ private:
 		SmartDashboard::PutNumber("Speed", driveStick.GetRawAxis(1));
 		SmartDashboard::PutNumber("Turn", driveStick.GetRawAxis(4));
 	}
+
+	// clockwise is positive
 	float GetAngle()
 	{
 		float angle = ahrs->GetAngle();
