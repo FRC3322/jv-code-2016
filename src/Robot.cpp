@@ -377,8 +377,6 @@ private:
 		if (liftCommand == DISABLED) {
 			liftPower = 0;
 		} else if (liftCommand == MANUAL_FORWARD) {
-
-
 			liftPower = liftGravity - .5;
 			// liftPower = -1.0;
 		} else if (liftCommand == MANUAL_BACK) {
